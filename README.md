@@ -47,6 +47,11 @@ dsh-side-tasks/
 └── README.md
 ```
 
+## Requirements / 环境要求
+
+- **DSH 0.1.0-rc.6+**, Node **>= 22.5**（`node:sqlite` 用于关闭时永久删除分支会话；Node 22.0–22.4 上插件仍可正常运行，仅"永久删除"降级为不删除）
+- **dsh-better-sidebar（可选）**：已安装时侧边任务注册为右侧边栏 Tab；未安装时自动回退为左侧入口 + 右侧抽屉模式，功能完整，**不会报错**
+
 ## Install / 安装
 
 ```bash

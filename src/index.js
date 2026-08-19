@@ -21,7 +21,6 @@
 import crypto from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
 
 const SESSION_POLL_MS = 2_000
 const ACTION_LIMIT = 64 * 1024
@@ -30,6 +29,22 @@ const PROMPT_LIMIT = 8_000
 const TITLE_LIMIT = 40
 
 export const API_PREFIX = '/api/side-tasks'
+
+/**
+ * `node:sqlite` is experimental and only exists on Node >= 22.5. Load it
+ * lazily so the plugin still boots on older Node 22 — the permanent-delete
+ * feature degrades to a no-op there instead of crashing the Host.
+ */
+let sqliteModulePromise
+function getDatabaseSync() {
+  if (sqliteModulePromise === undefined) {
+    sqliteModulePromise = import('node:sqlite').then(
+      mod => mod.DatabaseSync,
+      () => undefined,
+    )
+  }
+  return sqliteModulePromise
+}
 
 /** Order of the announcement section within the tool-guidance band. */
 const SECTION_ORDER = 200
@@ -269,7 +284,7 @@ export class BranchService {
     this.branches.delete(branchId)
     // Permanently delete the forked session from the DSH store so it stops
     // accumulating in the session list.
-    if (sessionId !== undefined) this.deleteSessionPermanently(sessionId)
+    if (sessionId !== undefined) await this.deleteSessionPermanently(sessionId)
     this.bump()
     return this.snapshot()
   }
@@ -281,8 +296,13 @@ export class BranchService {
    * Only sessions this plugin forked are ever targeted. Best-effort: failures
    * are logged and never break the close flow.
    */
-  deleteSessionPermanently(sessionId) {
+  async deleteSessionPermanently(sessionId) {
     if (typeof sessionId !== 'string' || sessionId === '') return false
+    const DatabaseSync = await getDatabaseSync()
+    if (DatabaseSync === undefined) {
+      console.warn('[dsh-side-tasks] node:sqlite unavailable (Node < 22.5?); session not permanently deleted')
+      return false
+    }
     try {
       // A busy timeout matters: the running DSH process holds the store's
       // write lock; without it node:sqlite fails immediately with SQLITE_BUSY.
@@ -305,12 +325,16 @@ export class BranchService {
    * cwd equals the Host cwd and that carry a parent (forked), excluding any
    * branch the plugin still tracks. Manual, user-confirmed operation.
    */
-  purgeHistory() {
+  async purgeHistory() {
     let removed = 0
+    const DatabaseSync = await getDatabaseSync()
+    if (DatabaseSync === undefined) {
+      return { removed: 0, error: 'node:sqlite unavailable (Node < 22.5?)' }
+    }
     const active = new Set([...this.branches.values()].map(record => record.sessionId).filter(Boolean))
     const cwd = process.cwd()
     try {
-      const db = new DatabaseSync(this.dbPath)
+      const db = new DatabaseSync(this.dbPath, { timeout: 5_000 })
       try {
         const rows = db.prepare(
           'SELECT id FROM sessions WHERE parent_session IS NOT NULL AND cwd = ?',
@@ -629,7 +653,7 @@ export function makeSideTaskRoutes(service) {
           const parsed = parseAction(body.value)
           if (parsed === undefined) return json(res, 400, { ok: false, error: 'invalid-action' })
           if (parsed.kind === 'purge') {
-            const result = service.purgeHistory()
+            const result = await service.purgeHistory()
             return json(res, 200, { ok: true, ...result })
           }
           let snapshot
