@@ -1,0 +1,11 @@
+# dsh-side-tasks bundle patch: inserts the dual-face plugin row into the web
+# profile roster. Activate with
+# `dsh plugin --profile web add link:<path>`.
+#
+# The row is a bare plugin by package name: the node half (exports ".") runs
+# in the host process (the system-prompt announcement section), and the
+# `dsh.client` declaration in package.json makes the browser half
+# (exports "./client", served at /plugins/<id>/client.js) load in the web GUI.
+- insert:
+    - id: side-tasks
+      name: dsh-side-tasks

@@ -1,0 +1,11 @@
+# Dependencies
+node_modules/
+
+# Backups
+*.bak
+*.bak2
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

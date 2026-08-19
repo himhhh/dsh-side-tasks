@@ -1,0 +1,30 @@
+{
+  "name": "dsh-side-tasks",
+  "description": "Codex-style side tasks for the DSH Web GUI: every task is an independent DSH session running in the background, with create / list / live status / jump-to-session / cancel. Mounted without DSH source changes.",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./src/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-connection"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "src",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "license": "MIT"
+}
