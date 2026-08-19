@@ -1,36 +1,45 @@
 # dsh-side-tasks
 
-Codex-style **side tasks** for the DSH Web GUI. Clicking the sidebar entry
-**forks the current conversation into a branch** — a new session id that
-inherits the full project context (cwd, model, history up to the last
-completed turn) — and opens a **chat panel** for it. You keep talking to the
-branch in the side panel while it runs in the background; the main
-conversation is never blocked. Branches are temporary: closing one confirms
-("此侧边任务将不保留") and drops it.
+**[English](README.md) | [中文](README.zh.md)**
 
-为 DSH Web GUI 制作的 Codex 式「侧边任务」插件：点击侧边栏「侧边任务」入口，
-会把**当前会话 fork 成一个分支**（新会话 id，完整继承项目上下文：cwd、模型、
-截至最后完成回合的对话历史），并**弹出一个聊天框**——相当于当前聊天的复制，
-你可以在侧边继续与它对话，它在后台独立执行、不阻塞主会话。侧边任务是**临时**
-的，关闭时会确认（「此侧边任务将不保留，是否关闭？」）后移除。
+Codex-style **side tasks** for the DSH Web GUI. Each side task **forks the
+current conversation into a branch** — a new session id that inherits the
+full project context (cwd, model, history up to the last completed turn) —
+and shows it as a **chat tab** in the [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)
+right sidebar. You keep talking to the branch while it runs in the
+background; the main conversation is never blocked. Branches are temporary:
+closing one confirms and **permanently deletes** it from the DSH store.
 
-## Features / 能力
+## Features
 
-- **Branch of the current conversation**（当前会话的分支）— `sessions.fork`:
-  新 sessionId + 继承完整项目上下文（点击时刻之前）
-- **Chat panel**（聊天框）— 消息历史（含复制的上下文）+ 输入发送 + 实时轮询
-  更新；每点击一次入口 = 新建一个分支
-- **Sidebar TAB**（右侧边栏 Tab）— 通过 `ctx.betterSidebar.registerTab`
-  注册（**必需** dsh-better-sidebar），`+` 菜单 / tab 栏打开，badge 显示运行中
-  分支数，tab 的 ✕ 关闭并确认删除
-- **Single side task**（单一侧边任务）— 新建自动替换旧的（账本只保留当前一个）
-- **Live status** — idle / running / done / failed / cancelled via Host polling
-  + SSE push
+- **Branch of the current conversation** — `sessions.fork`: new session id +
+  full inherited project context (as of the moment you open it)
+- **Chat tab** — message history (including the inherited context), input +
+  send (Enter to send, Shift+Enter for a newline), live polling updates
+- **Sidebar tab** — registered via `ctx.betterSidebar.registerTab`
+  (**requires** dsh-better-sidebar); opened from the `+` menu or the tab bar;
+  badge shows the running branch count; the tab's ✕ closes with a confirm
+- **Single side task** — a new branch replaces the previous one (the ledger
+  keeps exactly one)
+- **Live status** — idle / running / done / failed / cancelled via Host
+  polling + SSE push
 - **Cancel** a running branch turn (idempotent)
-- **Close with confirm**（关闭确认）— ✕ asks 「此侧边任务将不保留，是否关闭？」
-  then cancels + drops the branch from the ledger
+- **Close with confirm** — ✕ asks 「此侧边任务将不保留，是否关闭？」 then
+  cancels, drops the branch, and permanently deletes its session from the
+  DSH SQLite store (events cascade)
+- **Clean up history** — one-click removal of leftover side-task sessions
+  from previous runs
 
-## Files / 文件
+## Requirements
+
+- DSH 0.1.0-rc.6+, Node **>= 22.5** (`node:sqlite` powers permanent deletion
+  on close; on Node 22.0–22.4 the plugin still runs, but deletion degrades
+  to a no-op)
+- **dsh-better-sidebar >= 0.12.0 (required)** — the side task is delivered as
+  a right-sidebar tab; without it the plugin does not load and logs an install
+  hint (no DOM fallback)
+
+## Files
 
 ```
 dsh-side-tasks/
@@ -38,21 +47,17 @@ dsh-side-tasks/
 ├── cordis.patch.yml    # one-line insert row into the web profile roster
 ├── src/
 │   ├── index.js        # Host half: BranchService (fork/prompt/cancel/close
-│   │                   #   + history proxy + poll + SSE + routes)
-│   └── client.js       # Browser half: chat panel + branch chips + poll
-└── README.md
+│   │                   #   + history proxy + poll + SSE + SQLite deletion)
+│   └── client.js       # Browser half: better-sidebar tab + chat panel
+├── README.md
+└── README.zh.md
 ```
 
-## Requirements / 环境要求
-
-- **DSH 0.1.0-rc.6+**, Node **>= 22.5**（`node:sqlite` 用于关闭时永久删除分支会话；Node 22.0–22.4 上插件仍可正常运行，仅"永久删除"降级为不删除）
-- **dsh-better-sidebar（必装，>= 0.12.0）**：侧边任务以**右侧边栏 Tab** 形式提供；未安装时插件不加载并在控制台给出安装提示（无 DOM 兜底模式）
-
-## Install / 安装
+## Install
 
 ```bash
 # from the plugin directory (this repo root)
-dsh plugin --profile web add link:/Users/jimmy/Documents/DeepSeek/dsh侧边任务
+dsh plugin --profile web add link:/path/to/dsh-side-tasks
 
 # verify the insert row
 dsh --profile web --dump-config | grep -i side-tasks
@@ -61,23 +66,23 @@ dsh --profile web --dump-config | grep -i side-tasks
 # then refresh http://127.0.0.1:3080
 ```
 
-Uninstall / 卸载:
+Uninstall:
 
 ```bash
 dsh plugin --profile web remove dsh-side-tasks
 ```
 
-## Verify / 验证清单
+## Verify
 
-- [ ] Sidebar shows the 「侧边任务」 entry
-- [ ] Clicking it opens a chat panel whose history mirrors the current
-      conversation (the fork carries the context)
-- [ ] Sending a message runs in the background; replies stream in via polling
+- [ ] The 「侧边任务」 tab appears in the better-sidebar `+` menu
+- [ ] Opening it forks the current conversation (history mirrors the context)
+- [ ] Sending a message runs in the background; replies appear via polling
 - [ ] The main conversation keeps working while a branch runs (parallelism)
-- [ ] Multiple branches switch via the chips
-- [ ] ✕ asks 「此侧边任务将不保留，是否关闭？」 then drops the branch
+- [ ] The tab badge shows the running state
+- [ ] ✕ asks 「此侧边任务将不保留，是否关闭？」; confirming removes the branch
+      and its session from the DSH store
 
-## Design notes / 设计要点
+## Design notes
 
 - Host injects `apiProxy` / `webServer` / `systemPrompt`; a branch is created
   with `sessions.fork({ sessionId })` (inherits cwd/model/lineage/seed
@@ -85,19 +90,26 @@ dsh plugin --profile web remove dsh-side-tasks
 - Status reconciliation polls `sessions.list` and confirms a `turn/end` at or
   after the last prompt (mirrors the task-board settlement logic).
 - Routes: `GET /api/side-tasks/state`, `GET /api/side-tasks/history`,
-  `POST /api/side-tasks/action` (fork / prompt / cancel / close),
+  `POST /api/side-tasks/action` (fork / prompt / cancel / close / purge),
   `GET /api/side-tasks/events` (SSE + heartbeat), guarded by a loopback /
   same-origin fence; the action union contains no command/path/shell fields.
-- The client is plain DOM (no React) with a thin React shell only when
-  registering the better-sidebar tab; styled with the DSH `--dsw-*` theme
-  tokens. Chat messages poll the history route every 2 s (incremental by seq).
+- The client is plain DOM (no React) with a thin React shell for the
+  better-sidebar tab; styled with the DSH `--dsw-*` theme tokens. Chat
+  messages poll the history route every 2 s (merged by seq).
 - better-sidebar integration follows its [external plugin guide](https://github.com/omdsh-dev/DSH-better-sidebar/blob/main/docs/external-plugin-guide.md):
-  `ctx.get('betterSidebar')` is probed (never injected); registration is
-  wrapped in `ctx.effect` for HMR-safe disposal.
-- Platform limits: DSH exposes **no session-delete API**, so closing a branch
-  cancels its running turn and drops it from the plugin ledger, but the forked
-  session itself remains in the DSH session list. The ledger is in memory
-  (a Host restart drops branch records).
+  `ctx.get('betterSidebar')` is probed (never injected), with a short retry
+  ladder for the 454 KB bundle; registration is wrapped in `ctx.effect` for
+  HMR-safe disposal; tab close is intercepted (DOM capture) so a declined
+  confirm keeps the tab open.
+- Permanent deletion: the platform exposes **no session-delete API**, so on
+  close the plugin removes the session row from the DSH SQLite store
+  (`~/.dsh-cc/sessions.sqlite`, configurable via `dbPath`) — `events` cascade
+  via `ON DELETE CASCADE` and the search index reconciles. Only sessions this
+  plugin forked are ever touched. A running DSH process keeps in-memory
+  caches, so deleted branches vanish from the session list on the next DSH
+  restart.
+- `node:sqlite` is loaded lazily so the plugin boots on older Node 22 (the
+  delete feature degrades instead of crashing).
 
 ## License
 
