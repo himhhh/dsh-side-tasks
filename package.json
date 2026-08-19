@@ -1,6 +1,6 @@
 {
   "name": "dsh-side-tasks",
-  "description": "Codex-style side tasks for the DSH Web GUI: every task is an independent DSH session running in the background, with create / list / live status / jump-to-session / cancel. Mounted without DSH source changes.",
+  "description": "Codex-style side tasks for the DSH Web GUI: each side task is a branch of the current conversation (forked session with full inherited context) shown as a sidebar tab in dsh-better-sidebar, with chat, cancel, and permanent deletion on close. Requires dsh-better-sidebar.",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.js",
@@ -20,6 +20,9 @@
       ],
       "platform": "web"
     }
+  },
+  "peerDependencies": {
+    "dsh-better-sidebar": ">=0.12.0"
   },
   "files": [
     "src",

@@ -30,29 +30,21 @@ window.__ModuleLoader__.load({
     var exports = module.exports
     Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' })
 
-    // React is a shell-provided static module; only needed for the
-    // better-sidebar tab shell. Missing/undeliverable falls back to DOM mode.
+    // React is required: the tab shell mounts through better-sidebar (a
+    // mandatory dependency). Missing React means better-sidebar itself cannot
+    // run, so the plugin just logs and stays inert.
     var React
     try { React = require('react') } catch { React = undefined }
 
     // ===== constants =========================================================
 
     const API_PREFIX = '/api/side-tasks'
-    const ACTIVE_ATTR = 'data-dsh-side-tasks-active'
-    /** The sibling panel's activation attribute (ssh), removed when this panel opens. */
-    const OTHER_ACTIVE_ATTR = 'data-dsh-ssh-active'
-    /** Cross-plugin activation event; detail is the activating panel name. */
-    const ACTIVATE_EVENT = 'dsh-panel-activate'
-    const PANEL_NAME = 'side-tasks'
 
     const ENTRY_SELECTOR = '[data-dsh-side-tasks-entry]'
     const FAMILY_SELECTORS = '[data-dsh-side-tasks-entry], [data-dsh-taskboard-entry], [data-dsh-ssh-entry]'
     const SIDEBAR_SELECTOR = '[data-pane="sidebar"], [class*="sidebarCol"]'
-    const CONVERSATION_COLUMN_SELECTOR = '[data-pane="conversation"], [class*="centerCol"]'
-    const SIDEBAR_ROW_SELECTOR = '[class*="sessionRow"], [class*="projectRow"], [class*="searchResultRow"], [class*="searchResultWorkspace"], [class*="newSession"]'
 
     const LABEL = '侧边任务'
-    const DRAWER_WIDTH = 400
     const HISTORY_POLL_MS = 2_000
 
     /** Inline icon (matches the shell's 16px nav-icon look): branch / fork lines. */
@@ -70,40 +62,6 @@ window.__ModuleLoader__.load({
     // ===== styles ============================================================
 
     const CSS_TEXT = `
-[data-pane='conversation'],
-[class*='centerCol'] {
-  position: relative;
-}
-
-/* DOM-mode drawer: absolute on the right of the center column, hidden unless
-   the panel is active. Not used in better-sidebar mode (the tab lives inside
-   the sidebar pane). */
-[data-dsh-side-tasks-view] {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: ${DRAWER_WIDTH}px;
-  max-width: 85vw;
-  display: none;
-  z-index: 60;
-  overflow: hidden;
-  box-sizing: border-box;
-  border-left: 1px solid var(--dsw-alias-separator-primary);
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-primary);
-  font-family: var(--dsw-font-family);
-}
-
-html[data-dsh-side-tasks-active]:not([data-dsh-ssh-active]) [data-dsh-side-tasks-view] {
-  display: block;
-}
-
-html[data-dsh-side-tasks-active]:not([data-dsh-ssh-active]) [data-pane='conversation'],
-html[data-dsh-side-tasks-active]:not([data-dsh-ssh-active]) [class*='centerCol'] {
-  padding-right: min(${DRAWER_WIDTH}px, 85vw);
-}
-
 .st-entry {
   display: flex;
   align-items: center;
@@ -603,7 +561,6 @@ html[data-dsh-side-tasks-active]:not([data-dsh-ssh-active]) [class*='centerCol']
     function createController(sessions, transport) {
       // Single side task: at most one active branch.
       const state = {
-        open: false,
         revision: 0,
         branch: undefined,     // the one active branch record
         messages: [],          // ascending by seq
@@ -899,31 +856,8 @@ html[data-dsh-side-tasks-active]:not([data-dsh-ssh-active]) [class*='centerCol']
         }
       }
 
-      function open() {
-        state.open = true
-        document.documentElement.removeAttribute(OTHER_ACTIVE_ATTR)
-        document.documentElement.setAttribute(ACTIVE_ATTR, '')
-        document.dispatchEvent(new CustomEvent(ACTIVATE_EVENT, { detail: PANEL_NAME }))
-        startLive()
-        void refreshState()
-        notify()
-      }
-
-      function close() {
-        state.open = false
-        document.documentElement.removeAttribute(ACTIVE_ATTR)
-        stopLive()
-        notify()
-      }
-
-      function toggle() {
-        if (state.open) close()
-        else open()
-      }
-
       function getSnapshot() {
         return {
-          open: state.open,
           revision: state.revision,
           branch: state.branch === undefined ? undefined : { ...state.branch },
           messages: state.messages.map(message => ({ ...message })),
@@ -939,9 +873,6 @@ html[data-dsh-side-tasks-active]:not([data-dsh-ssh-active]) [class*='centerCol']
           listeners.add(listener)
           return () => { listeners.delete(listener) }
         },
-        open,
-        close,
-        toggle,
         activate: startLive,
         deactivate: stopLive,
         ensureBranch,
@@ -1053,15 +984,12 @@ html[data-dsh-side-tasks-active]:not([data-dsh-ssh-active]) [class*='centerCol']
       }
     }
 
-    // ===== side chat panel (shared by both modes) ============================
+    // ===== side chat panel ===================================================
 
-    function createChatPanel(controller, options = {}) {
+    function createChatPanel(controller) {
       const root = document.createElement('div')
-      root.className = options.drawer ? 'st-panel st-drawer' : 'st-panel'
-      if (options.drawer) {
-        root.setAttribute('data-dsh-side-tasks-view', '')
-        root.setAttribute('data-dsh-plugin', 'side-tasks')
-      }
+      root.className = 'st-panel'
+      root.setAttribute('data-dsh-plugin', 'side-tasks')
 
       // header
       const header = document.createElement('div')
@@ -1086,18 +1014,8 @@ html[data-dsh-side-tasks-active]:not([data-dsh-ssh-active]) [class*='centerCol']
       purgeBtn.title = '删除历史遗留的侧边任务会话（不可恢复）'
       purgeBtn.addEventListener('click', () => { void controller.purgeHistory() })
       headerActions.append(purgeBtn)
-      // The in-panel ✕ is DOM-mode only (no tab bar to close from there).
-      // In better-sidebar mode closing goes through the tab bar's own ✕,
+      // No in-panel ✕: closing the side task goes through the tab bar's ✕,
       // which routes into closeBranch via the descriptor's onClose.
-      if (options.showClose !== false) {
-        const closeBtn = document.createElement('button')
-        closeBtn.type = 'button'
-        closeBtn.className = 'st-iconBtn'
-        closeBtn.textContent = '✕'
-        closeBtn.title = '关闭当前侧边任务'
-        closeBtn.addEventListener('click', () => { void handleClose() })
-        headerActions.append(closeBtn)
-      }
       header.append(title, headerActions)
 
       // status line
@@ -1139,18 +1057,6 @@ html[data-dsh-side-tasks-active]:not([data-dsh-ssh-active]) [class*='centerCol']
       composer.append(inputEl, composerRow)
 
       root.append(header, statusLine, messagesEl, composer)
-
-      async function handleClose() {
-        const snapshot = controller.getSnapshot()
-        if (snapshot.branch === undefined) {
-          controller.close()
-          return
-        }
-        const closed = await controller.closeBranch()
-        if (closed && options.drawer && controller.getSnapshot().branch === undefined) {
-          controller.close()
-        }
-      }
 
       async function submit() {
         if (sendBtn.disabled) return
@@ -1262,58 +1168,6 @@ html[data-dsh-side-tasks-active]:not([data-dsh-ssh-active]) [class*='centerCol']
       }
     }
 
-    // ===== DOM mode: center-column drawer ===================================
-
-    function mountDomMode(ctx, sessions, transport) {
-      const controller = createController(sessions, transport)
-      const disposers = []
-      let drawer
-
-      // Clicking the entry opens the side chat and forks a branch if needed.
-      disposers.push(mountSidebarEntry(() => {
-        if (!controller.getSnapshot().open) controller.open()
-        void controller.ensureBranch()
-      }))
-
-      const ensureDrawer = () => {
-        if (drawer !== undefined) return
-        const column = document.querySelector(CONVERSATION_COLUMN_SELECTOR)
-        if (column === null) return
-        drawer = createChatPanel(controller, { drawer: true })
-        column.appendChild(drawer.root)
-      }
-      const waitObserver = new MutationObserver(() => { ensureDrawer() })
-      waitObserver.observe(document.body, { childList: true, subtree: true })
-
-      const onOtherActivate = (event) => {
-        const detail = event instanceof CustomEvent ? event.detail : undefined
-        if (detail !== PANEL_NAME && controller.getSnapshot().open) controller.close()
-      }
-      document.addEventListener(ACTIVATE_EVENT, onOtherActivate)
-
-      const onClickSidebarRow = (event) => {
-        if (!controller.getSnapshot().open) return
-        const target = event.target
-        if (target instanceof HTMLElement && target.closest(SIDEBAR_ROW_SELECTOR) !== null) {
-          controller.close()
-        }
-      }
-      document.addEventListener('click', onClickSidebarRow, true)
-
-      ensureDrawer()
-      disposers.push(() => {
-        waitObserver.disconnect()
-        drawer?.dispose()
-        document.removeEventListener(ACTIVATE_EVENT, onOtherActivate)
-        document.removeEventListener('click', onClickSidebarRow, true)
-      })
-
-      return () => {
-        controller.dispose()
-        for (const dispose of disposers) dispose()
-      }
-    }
-
     // ===== better-sidebar mode: registered tab ===============================
 
     function iconNode(size = 14) {
@@ -1348,7 +1202,7 @@ html[data-dsh-side-tasks-active]:not([data-dsh-ssh-active]) [class*='centerCol']
       React.useEffect(() => {
         const el = ref.current
         if (el === null) return undefined
-        const panel = createChatPanel(props.controller, { showClose: false })
+        const panel = createChatPanel(props.controller)
         el.replaceChildren(panel.root)
         props.controller.activate()
         return () => {
@@ -1443,7 +1297,7 @@ html[data-dsh-side-tasks-active]:not([data-dsh-ssh-active]) [class*='centerCol']
         const transport = createTransport()
         let disposed = false
         let uiDisposer
-        let switched = false
+        let mounted = false
         let retryTimer
 
         /** Mount the better-sidebar tab; false when the service is not ready. */
@@ -1453,24 +1307,26 @@ html[data-dsh-side-tasks-active]:not([data-dsh-ssh-active]) [class*='centerCol']
             return false
           }
           console.info('[dsh-side-tasks] better-sidebar detected, mounting as sidebar tab')
-          uiDisposer?.()
           uiDisposer = mountBetterSidebarMode(ctx, sessions, bs, transport)
-          switched = true
+          mounted = true
           return true
         }
 
-        if (!tryBetterSidebar()) {
-          console.info('[dsh-side-tasks] better-sidebar not ready yet, using DOM drawer; will switch when available')
-          uiDisposer = mountDomMode(ctx, sessions, transport)
+        // better-sidebar is REQUIRED. Its 454 KB client bundle may still be
+        // loading when this plugin activates, so retry briefly; if it never
+        // appears, log a clear hint instead of mounting a fallback UI.
+        if (tryBetterSidebar()) {
+          console.info('[dsh-side-tasks] mounted in better-sidebar mode')
+        } else {
+          console.warn('[dsh-side-tasks] dsh-better-sidebar not available yet — retrying…')
           const retries = [250, 700, 1500, 3000, 5000]
           const attempt = (index) => {
-            if (disposed || switched) return
+            if (disposed || mounted) return
             if (tryBetterSidebar()) return
             if (index < retries.length) retryTimer = setTimeout(() => attempt(index + 1), retries[index])
+            else console.error('[dsh-side-tasks] dsh-better-sidebar is required but never appeared; the side task is disabled. Install it via: dsh plugin --profile web add dsh-better-sidebar')
           }
           retryTimer = setTimeout(() => attempt(0), 250)
-        } else {
-          console.info('[dsh-side-tasks] mounted in better-sidebar mode')
         }
 
         ctx.effect(() => () => {
@@ -1479,7 +1335,7 @@ html[data-dsh-side-tasks-active]:not([data-dsh-ssh-active]) [class*='centerCol']
           uiDisposer?.()
         }, 'side-tasks: client UI')
       } catch (error) {
-        // DOM/UI failures degrade the panel, never the GUI.
+        // UI failures degrade the panel, never the GUI.
         console.error('[dsh-side-tasks] client mount failed:', error)
       }
     }

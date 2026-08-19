@@ -20,14 +20,10 @@ conversation is never blocked. Branches are temporary: closing one confirms
   新 sessionId + 继承完整项目上下文（点击时刻之前）
 - **Chat panel**（聊天框）— 消息历史（含复制的上下文）+ 输入发送 + 实时轮询
   更新；每点击一次入口 = 新建一个分支
-- **Two mounting modes**（双模式，自动选择）:
-  - `dsh-better-sidebar` installed → the panel is registered as a **sidebar
-    TAB** (`ctx.betterSidebar.registerTab`); the left entry forks + opens the
-    tab, whose badge shows the running-branch count
-  - otherwise → a self-healing left sidebar entry + a right-hand drawer over
-    the center column (conversation stays visible via a shrink layout)
-- **Multiple branches**（多分支）— branch chips at the top switch chats; each
-  branch is an independent background session
+- **Sidebar TAB**（右侧边栏 Tab）— 通过 `ctx.betterSidebar.registerTab`
+  注册（**必需** dsh-better-sidebar），`+` 菜单 / tab 栏打开，badge 显示运行中
+  分支数，tab 的 ✕ 关闭并确认删除
+- **Single side task**（单一侧边任务）— 新建自动替换旧的（账本只保留当前一个）
 - **Live status** — idle / running / done / failed / cancelled via Host polling
   + SSE push
 - **Cancel** a running branch turn (idempotent)
@@ -50,7 +46,7 @@ dsh-side-tasks/
 ## Requirements / 环境要求
 
 - **DSH 0.1.0-rc.6+**, Node **>= 22.5**（`node:sqlite` 用于关闭时永久删除分支会话；Node 22.0–22.4 上插件仍可正常运行，仅"永久删除"降级为不删除）
-- **dsh-better-sidebar（可选）**：已安装时侧边任务注册为右侧边栏 Tab；未安装时自动回退为左侧入口 + 右侧抽屉模式，功能完整，**不会报错**
+- **dsh-better-sidebar（必装，>= 0.12.0）**：侧边任务以**右侧边栏 Tab** 形式提供；未安装时插件不加载并在控制台给出安装提示（无 DOM 兜底模式）
 
 ## Install / 安装
 
